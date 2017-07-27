@@ -45,16 +45,16 @@ function update_U_inverse!(Θ::CovarianceMatrix{p,T} where {T<:Real}) where {p}
     Θ.U_inverse.diag[i] = exp(Θ.Λ[i])
   end
 end
-function build{p, T}(A::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int, CovMat::Symmetric{T,Array{T,2}} = Symmetric(Array{T}(p,p)))
+function build(A::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int, CovMat::Symmetric{T,Array{T,2}} = Symmetric(Array{T}(p,p))) where {p, T}
   Λ = view(Θv, i + (1:p))
   U = UpperTriangleVector{p,T}(MVector{p}(Vector{T}(p)), Vector{T}(round(Int,type_length(A))))
   U_inverse = UpperTriangleView{p,T}(MVector{p}(exp.(Λ)), view(Θv, i + (1+p:type_length(A))))
   CovarianceMatrix{p, T}(Λ, U, CovMat, U_inverse)
 end
-function construct{p, T}(A::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int, CovMat::Array{T,2})
-  construct{p, T}(A, Θv, i, Symmetric(CovMat))
+function construct(A::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int, CovMat::Array{T,2}) where {p, T}
+  construct(A, Θv, i, Symmetric(CovMat))
 end
-function construct{p, T}(A::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int, CovMat::Symmetric{T,Array{T,2}})
+function construct(A::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int, CovMat::Symmetric{T,Array{T,2}}) where {p, T}
   if CovMat.uplo != 'U'
     CovMat = Symmetric(CovMat.data')
   end

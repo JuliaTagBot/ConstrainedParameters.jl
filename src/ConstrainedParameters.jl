@@ -34,7 +34,11 @@ export  Data,
         logit,
         logistic,
         sigmoid,
-        update!
+        update_Σ!,
+        update!,
+        htrace_AΣinv,
+        hlogdet,
+        nhlogdet
 
 include("helper_functions.jl")
 include("constrained_types/constrained_types.jl")
