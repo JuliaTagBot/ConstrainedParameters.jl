@@ -10,13 +10,13 @@ end
 function lpdf_normal(x::AbstractArray{<:Real,1}, μ::AbstractArray{<:Real,1}, σ::Real)
   -log(σ)*length(x) - sum( (x .- μ) .^ 2 ) / 2σ^2
 end
-function lpdf_normal{p}(x::AbstractArray{<:Real,1}, μ::ConstrainedVector{p, <: Real}, σ::Real)
+function lpdf_normal(x::AbstractArray{<:Real,1}, μ::ConstrainedVector{p, <: Real}, σ::Real) where {p}
   -log(σ)*p - sum( (x .- μ.x) .^ 2 ) / 2σ^2
 end
-function lpdf_normal{p}(x::ConstrainedVector{p, <: Real}, μ::AbstractArray{<:Real,1}, σ::Real)
+function lpdf_normal(x::ConstrainedVector{p, <: Real}, μ::AbstractArray{<:Real,1}, σ::Real) where {p}
   -log(σ)*p - sum( (x.x .- μ) .^ 2 ) / 2σ^2
 end
-function lpdf_normal{p}(x::ConstrainedVector{p, <: Real}, μ::ConstrainedVector{p, <: Real}, σ::Real)
+function lpdf_normal(x::ConstrainedVector{p, <: Real}, μ::ConstrainedVector{p, <: Real}, σ::Real) where {p}
   -log(σ)*p - sum( (x.x .- μ.x) .^ 2 ) / 2σ^2
 end
 function lpdf_normal(x::Vector, Σ::CovarianceMatrix)
@@ -64,10 +64,10 @@ lpdf_normal(x::AbstractArray{<:Real,1}, μ::AbstractArray{<:Real,1}, Σ::Abstrac
 
 
 
-function lpdf_InverseWishart{p,T}(Σ::CovarianceMatrix{p,T}, Λ::AbstractArray{<: Real,2}, ν::Real)
+function lpdf_InverseWishart(Σ::CovarianceMatrix{p,T}, Λ::AbstractArray{<: Real,2}, ν::Real) where {p,T}
   negative_log_root_det(Σ)*(ν + p + 1) - trace_AΣinv(A, Σ) / 2
 end
-function lpdf_InverseWishart{p,T}(Σ::CovarianceMatrix{p,T}, Λ::Real, ν::Real)
+function lpdf_InverseWishart(Σ::CovarianceMatrix{p,T}, Λ::Real, ν::Real) where {p,T}
   negative_log_root_det(Σ)*(ν + p + 1) - Λ * trace_inverse(Σ) / 2
 end
-lpdf_InverseWishart{p,T}(Σ::CovarianceMatrix{p,T}, Λ::UniformScaling, ν::Real) = lpdf_InverseWishart{p,T}(Σ, Λ.λ, ν)
+lpdf_InverseWishart(Σ::CovarianceMatrix{p,T}, Λ::UniformScaling, ν::Real) where {p,T} = lpdf_InverseWishart(Σ, Λ.λ, ν)
