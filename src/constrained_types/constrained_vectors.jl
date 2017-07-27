@@ -11,6 +11,12 @@ end
 struct RealVector{p, T} <: ConstrainedVector{p, T}
   x::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int64}},true}
 end
+struct Simplex{p, q, T} <: ConstrainedVector{p, T}
+  Θ::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int64}},true}
+  x::MVector{p,T}
+  z::MVector{q,T}
+  csx::MVector{q,T}
+end
 
 
 Base.:+(x::ConstrainedVector, y::Vector) = x.x .+ y
@@ -100,6 +106,47 @@ function construct(::Type{RealVector{p,T}}, Θ::Vector{T}, i::Int, vals::Vector{
   rv
 end
 
+
+Simplex(Θ::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int64}},true}) where {T} = Simplex{length(x), T}(Θ, MVector{length(x)}(SimplexTransform.(Θ)))
+function update!(x::Simplex{p, q, T} where {T <: Real, q}) where {p}
+  for i ∈ eachindex(x.Θ)
+    x.z[i] = logistic(x.Θ[i] - log( p - i ) )
+  end
+  x.csx[1] = x.x[1] = x.z[1]
+  for i ∈ 2:p-1
+    x.x[i] = (1 - x.csx[i-1]) * x.z[i]
+    x.csx[i] = x.x[i] + x.csx[i-1]
+  end
+  x.x[end] = 1 - x.csx[end]
+end
+function log_jacobian!(x::ProbabilityVector)
+  out = log(x.z[1]) + log(1 - x.z[1])
+  for i ∈ 2:q
+    out += log(x.z[i]) + log(1 - x.z[i]) + log(1 - x.csx[i - 1])
+  end
+  out
+end
+type_length(::Type{Simplex{p,q,T}} where {p,T}) where {q} = q
+Base.getindex(x::Simplex, i::Int) = x.x[i]
+function Base.setindex!(x::Simplex{p,q,T}, v::Vector{ <: Real}, i::Int)
+  x.x[i] = v
+  if i == 1
+    x.Θ[i] = logit( v ) - log(p - i)
+  elseif i == p
+    x.Θ[i] = logit( v / (1 - x.csx[i-1]) ) - log(p - i)
+  else
+    x.Θ[i] = logit( v / (1 - x.csx[i-1]) ) - log(p - i)
+  end
+end
+function construct(::Type{ProbabilityVector{p,T}}, Θv::Vector{T}, i::Int) where {p, q, T}
+  v = view(Θv, i + (1:p))
+  ProbabilityVector{p, T}(v, MVector{p}(logistic.(v)))
+end
+function construct(::Type{ProbabilityVector{p,T}}, Θv::Vector{T}, i::Int, vals::Vector{T}) where {p, T}
+  pv = ProbabilityVector{p, T}(view(Θv, i + (1:p)), MVector{p}(vals))
+  pv.Θ .= logit.(vals)
+  pv
+end
 
 #struct LowerBoundVector{p, T}
 #  Θ::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int64}},true}
