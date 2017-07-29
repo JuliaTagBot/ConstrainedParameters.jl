@@ -160,7 +160,7 @@ function Base.setindex!(Θ::CovarianceMatrix{p,T}, v::T, i::Int, j::Int) where {
 end
 
 
-function quad_form(x::Vector{Real}, Θ::CovarianceMatrix)
+function quad_form(x::AbstractArray{<:Real,1}, Θ::CovarianceMatrix{p, <:Real}) where {p}
   out = (x[1] * Θ.U_inverse.diag[1])^2
   for i ∈ 2:p
     dot_prod = x[i] * Θ.U_inverse.diag[i]

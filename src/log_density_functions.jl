@@ -4,7 +4,7 @@
 function lpdf_normal(x::Real, σ::Real)
   -log(σ) - (x/σ)^2/2
 end
-function lpdf_normal(x::Vector, σ::Real)
+function lpdf_normal(x::AbstractArray{<:Real,1}, σ::Real)
   -log(σ)*length(x) - sum( x .^ 2 ) / 2σ^2
 end
 function lpdf_normal(x::AbstractArray{<:Real,1}, μ::AbstractArray{<:Real,1}, σ::Real)
@@ -19,10 +19,10 @@ end
 function lpdf_normal(x::ConstrainedVector{p, <: Real}, μ::ConstrainedVector{p, <: Real}, σ::Real) where {p}
   -log(σ)*p - sum( (x.x .- μ.x) .^ 2 ) / 2σ^2
 end
-function lpdf_normal(x::Vector, Σ::CovarianceMatrix)
-  negative_log_root_det(Σ) - quad_form(x, Σ)/2
+function lpdf_normal(x::AbstractArray{<:Real,1}, Σ::CovarianceMatrix)
+  nhlogdet(Σ) - quad_form(x, Σ)/2
 end
-function lpdf_normal(x::Vector, Σ::AbstractArray{<: Real,2})
+function lpdf_normal(x::AbstractArray{<:Real,1}, Σ::AbstractArray{<: Real,2})
   Σi = chol(Symmetric(Σ))
   out = logdet(Σi)/2
   for i ∈ 1:size(Σi,1)
@@ -65,9 +65,9 @@ lpdf_normal(x::AbstractArray{<:Real,1}, μ::AbstractArray{<:Real,1}, Σ::Abstrac
 
 
 function lpdf_InverseWishart(Σ::CovarianceMatrix{p,T}, Λ::AbstractArray{<: Real,2}, ν::Real) where {p,T}
-  negative_log_root_det(Σ)*(ν + p + 1) - trace_AΣinv(A, Σ) / 2
+  nhlogdet(Σ)*(ν + p + 1) - trace_AΣinv(Λ, Σ) / 2
 end
 function lpdf_InverseWishart(Σ::CovarianceMatrix{p,T}, Λ::Real, ν::Real) where {p,T}
-  negative_log_root_det(Σ)*(ν + p + 1) - Λ * trace_inverse(Σ) / 2
+  nhlogdet(Σ)*(ν + p + 1) - Λ * trace_inverse(Σ) / 2
 end
 lpdf_InverseWishart(Σ::CovarianceMatrix{p,T}, Λ::UniformScaling, ν::Real) where {p,T} = lpdf_InverseWishart(Σ, Λ.λ, ν)

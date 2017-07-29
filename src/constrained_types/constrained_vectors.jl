@@ -107,19 +107,19 @@ function construct(::Type{RealVector{p,T}}, Θ::Vector{T}, i::Int, vals::Vector{
 end
 
 
-Simplex(Θ::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int64}},true}) where {T} = Simplex{length(x), T}(Θ, MVector{length(x)}(SimplexTransform.(Θ)))
-function update!(x::Simplex{p, q, T} where {T <: Real, q}) where {p}
+#Simplex(Θ::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int64}},true}) where {T} = Simplex{length(x), T}(Θ, MVector{length(x)}(SimplexTransform.(Θ)))
+function update!(x::Simplex{p, q, T} where {T <: Real}) where {p, q}
   for i ∈ eachindex(x.Θ)
     x.z[i] = logistic(x.Θ[i] - log( p - i ) )
   end
   x.csx[1] = x.x[1] = x.z[1]
-  for i ∈ 2:p-1
+  for i ∈ 2:q
     x.x[i] = (1 - x.csx[i-1]) * x.z[i]
     x.csx[i] = x.x[i] + x.csx[i-1]
   end
   x.x[end] = 1 - x.csx[end]
 end
-function log_jacobian!(x::ProbabilityVector)
+function log_jacobian!(x::Simplex{p, q, T} where {p,T}) where {q}
   out = log(x.z[1]) + log(1 - x.z[1])
   for i ∈ 2:q
     out += log(x.z[i]) + log(1 - x.z[i]) + log(1 - x.csx[i - 1])
@@ -128,24 +128,39 @@ function log_jacobian!(x::ProbabilityVector)
 end
 type_length(::Type{Simplex{p,q,T}} where {p,T}) where {q} = q
 Base.getindex(x::Simplex, i::Int) = x.x[i]
-function Base.setindex!(x::Simplex{p,q,T}, v::Vector{ <: Real}, i::Int)
+
+#Using setindex! is strongly discouraged.
+
+function Base.setindex!(x::Simplex, v::Vector{ <: Real}, i::Int)
+  x.x .*= (1 .- v) ./ (1 .- x.x[i])
   x.x[i] = v
-  if i == 1
-    x.Θ[i] = logit( v ) - log(p - i)
-  elseif i == p
-    x.Θ[i] = logit( v / (1 - x.csx[i-1]) ) - log(p - i)
-  else
-    x.Θ[i] = logit( v / (1 - x.csx[i-1]) ) - log(p - i)
+  set_prob!(x)
+end
+function set_prob!(x::Simplex, π::AbstractArray{<:Real,1})
+  x.x .= π
+  set_prob!(x)
+end
+function set_prob!(x::Simplex{p,q,T}) where {p,q,T}
+  x.csx[1] = x.z[1] = x.x[1]
+  y[i] = logit(x.z[1]) + log(p - 1)
+  for i ∈ 2:q
+    x.csx[i] = x.csx[i-1] + x.x[i]
+    x.z[i] = x.x[i] / (1 - x.csx[i-1])
+    y[i] = logit(x.z[i]) + log(p - i)
   end
 end
-function construct(::Type{ProbabilityVector{p,T}}, Θv::Vector{T}, i::Int) where {p, q, T}
-  v = view(Θv, i + (1:p))
-  ProbabilityVector{p, T}(v, MVector{p}(logistic.(v)))
+function Simplex(v::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int64}},true}, q = length(v)) where {T}
+  Simplex{q+1,q,T}(v, MVector{q+1}(Vector{T}(q+1)), MVector{q}(Vector{T}(q)), MVector{q}(Vector{T}(q)))
 end
-function construct(::Type{ProbabilityVector{p,T}}, Θv::Vector{T}, i::Int, vals::Vector{T}) where {p, T}
-  pv = ProbabilityVector{p, T}(view(Θv, i + (1:p)), MVector{p}(vals))
-  pv.Θ .= logit.(vals)
-  pv
+function construct(::Type{Simplex{p,q,T}} where {p}, Θv::Vector{T}, i::Int) where {q, T}
+  out = Simplex(view(Θv, i + (1:q)), q)
+  update!(out)
+  out
+end
+function construct(::Type{Simplex{p,q,T}}, Θv::Vector{T}, i::Int, vals::Vector{T}) where {p, q, T}
+  out = Simplex(view(Θv, i + (1:q)))
+  set_prob!(out, vals)
+  out
 end
 
 #struct LowerBoundVector{p, T}
