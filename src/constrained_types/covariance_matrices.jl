@@ -236,7 +236,7 @@ function Base.show(io::IO, ::MIME"text/plain", Θ::CovarianceMatrix)
   println(Θ.Σ)
 end
 @generated type_length(::Type{CovarianceMatrix{p,T}}) where {p,T} = round(Int, p * (p+1)/2)
-function convert(::Type{Symmetric{T,Array{T,2}}}, A::CovarianceMatrix{p,T}) where {p,T}
+function convert(::Type{Symmetric}, A::CovarianceMatrix{p,T}) where {p,T}
   update_Σ!(A)
   A.Σ
 end

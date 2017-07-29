@@ -1,7 +1,7 @@
 using ConstrainedParameters
 using Base.Test
 
-using ForwardDiff
+using ForwardDiff, StaticArrays
 
 # write your own tests here
 constrained_types = [PositiveVector, ProbabilityVector, RealVector]
@@ -26,12 +26,24 @@ end
   p = rand(1:100)
   x = randn(p)
   cv = construct(q{p,Float64},x,0)
+  cv
   @test log_jacobian!(cv) ≈ logabsdet(ForwardDiff.jacobian(x -> cvt(q{p}, x), x))[1]
+  @test length(cv) == p
 end
 
 p = rand(1:15)
 x = randn(round(Int,p*(p+1)/2))
 cv = construct(CovarianceMatrix{p,Float64},x,0)
-
+cv
+S = randn(2p,p) |> x -> x' * x
+x = @SVector randn(p);
+μ = @SVector randn(p);
 #The CovarianceMatrix log_jacobian! function drops the constant p*log(2) term.
-@test log_jacobian!(cv) + p*log(2) ≈ logabsdet(ForwardDiff.jacobian(x -> cvt(CovarianceMatrix{p}, x), x))[1]
+@testset begin
+  @test log_jacobian!(cv) + p*log(2) ≈ logabsdet(ForwardDiff.jacobian(x -> cvt(CovarianceMatrix{p}, x), x))[1]
+  update_Σ!(cv)
+  @test lpdf_InverseWishart(cv, 3.0I, p+1) ≈ -(p+1)*logdet(cv.Σ) - trace(3 * inv(cv.Σ)) / 2
+  @test lpdf_InverseWishart(cv, S, p+1) ≈ -(p+1)*logdet(cv.Σ) - trace(S * inv(cv.Σ)) / 2
+  @test lpdf_normal(x, μ, cv) ≈ -( logdet(cv.Σ)  + (x .- μ)' * inv(cv.Σ) * (x .- μ) ) / 2
+  @test length(cv) == round(Int, p*(p+1)/2)
+end
