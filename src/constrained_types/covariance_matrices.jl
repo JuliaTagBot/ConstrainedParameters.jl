@@ -41,7 +41,7 @@ end
 
 
 function update_U_inverse!(Θ::CovarianceMatrix{p,T} where {T<:Real}) where {p}
-  for i ∈ 1:p
+  @inbounds for i ∈ 1:p
     Θ.U_inverse.diag[i] = exp(Θ.Λ[i])
   end
 end
@@ -71,13 +71,13 @@ construct(A::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int) where {p, T} =
 update!(Θ::CovarianceMatrix) = update_U_inverse!(Θ)
 function log_jacobian!(Θ::CovarianceMatrix{p, T}) where {p, T}
   l_jac = zero(T)
-  for i ∈ 1:p
+  @inbounds for i ∈ 1:p
     l_jac += (i - 2p - 1) * Θ.Λ[i]
   end
   l_jac
 end
 function chol!(U::UpperTriangle{p,T}, Σ::Symmetric{T,Array{T, 2}}) where {p,T}
-  for i ∈ 1:p
+  @inbounds for i ∈ 1:p
     U[i,i] = Σ[i,i]
     for j ∈ 1:i-1
       U[j,i] = Σ[j,i]
@@ -96,7 +96,7 @@ function calc_U_from_Σ!(Θ::CovarianceMatrix{p, T}) where {p,T}
 end
 function calc_Σij!(Θ::CovarianceMatrix, i::Int, j::Int)
   Θ.Σ.data[j,i] = Θ.U[1,i] * Θ.U[1,j]
-  for k ∈ 2:j
+  @inbounds for k ∈ 2:j
     Θ.Σ.data[j,i] += Θ.U[k,i] * Θ.U[k,j]
   end
   Θ.Σ.data[j,i]
@@ -108,13 +108,13 @@ function calc_Σ!(Θ::CovarianceMatrix{p,<:Real}) where {p}
 end
 function calc_invΣij(Θ::CovarianceMatrix{p,T}, i::Int, j::Int) where {p,T}
   out = zero(T)
-  for k ∈ i:p
+  @inbounds for k ∈ i:p
     out += Θ.U_inverse[i,k] * Θ.U_inverse[j,k]
   end
   out
 end
 function inv!(U_inverse::UpperTriangle{p,T}, U::UpperTriangle{p,T}) where {p,T}
-  for i ∈ 1:p
+  @inbounds for i ∈ 1:p
     U_inverse.diag[i] = 1 / U.diag[i]
     for j ∈ i+1:p
       triangle_index = sub2triangle(i,j-1)
@@ -162,7 +162,7 @@ end
 
 function quad_form(x::AbstractArray{<:Real,1}, Θ::CovarianceMatrix{p, <:Real}) where {p}
   out = (x[1] * Θ.U_inverse.diag[1])^2
-  for i ∈ 2:p
+  @inbounds for i ∈ 2:p
     dot_prod = x[i] * Θ.U_inverse.diag[i]
     triangle_index = round(Int, (i-1)*(i-2)/2)
     for j ∈ 1:i-1
@@ -177,7 +177,7 @@ function trace_AΣinv(A::AbstractArray{<:Real}, Σ::CovarianceMatrix{p,T}) where
 end
 function htrace_AΣinv(A::AbstractArray{<:Real}, Σ::CovarianceMatrix{p,T}) where {p,T}
   out = zero(T)
-  for i ∈ 1:p
+  @inbounds for i ∈ 1:p
     out += A[i,i] * calc_invΣij(Σ, i, i) / 2
     for j ∈ 1:i-1
       out += A[j,i] * calc_invΣij(Σ, i, j)
