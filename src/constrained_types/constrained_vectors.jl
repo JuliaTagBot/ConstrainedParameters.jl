@@ -47,6 +47,7 @@ function log_jacobian!(x::PositiveVector)
   sum(x.Θ)
 end
 type_length(::Type{PositiveVector{p,T}}) where {p,T} = p
+param_type_length(::Type{PositiveVector{p,T}}) where {p,T} = Val{p}
 Base.getindex(x::PositiveVector, i::Int) = exp(x.Θ[i])
 function Base.setindex!(x::PositiveVector, v::Real, i::Int)
   x.x[i] = v
@@ -74,6 +75,7 @@ function log_jacobian!(x::ProbabilityVector)
   sum(log.(x.x) .+ log.(1 .- x.x))
 end
 type_length(::Type{ProbabilityVector{p,T}}) where {p,T} = p
+param_type_length(::Type{ProbabilityVector{p,T}}) where {p,T} = Val{p}
 Base.getindex(x::ProbabilityVector, i::Int) = x.x[i]
 function Base.setindex!(x::ProbabilityVector, v::Real, i::Int)
   x.x[i] = v
@@ -97,6 +99,7 @@ end
 @generated log_jacobian!(x::RealVector{p, T} where {p}) where {T} = zero(T)
 
 type_length(::Type{RealVector{p,T}}) where {p,T} = p
+param_type_length(::Type{RealVector{p,T}}) where {p,T} = Val{p}
 function construct(::Type{RealVector{p,T}}, Θ::Vector{T}, i::Int) where {p, T}
   RealVector{p, T}(view(Θ, i + (1:p)))
 end
@@ -127,6 +130,7 @@ function log_jacobian!(x::Simplex{p, q, T} where {p,T}) where {q}
   out
 end
 type_length(::Type{Simplex{p,q,T}} where {p,T}) where {q} = q
+param_type_length(::Type{Simplex{p,q,T}} where {p,T}) where {q} = Val{q}
 Base.getindex(x::Simplex, i::Int) = x.x[i]
 
 #Using setindex! is strongly discouraged.

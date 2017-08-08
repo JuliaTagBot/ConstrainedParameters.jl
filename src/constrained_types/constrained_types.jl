@@ -10,6 +10,7 @@ log_jacobian!(A::AbstractArray{T}) where {T} = zero(T)
 Base.IndexStyle(::parameters) = IndexLinear()
 
 type_length(::Type{Vector{T}} where {T}) = 0
+param_type_length(::Type{Vector{T}} where {T}) = Val{0}
 #type_length{p,T}(::Type{MVector{p,T}}) = p
 
 function Base.show(io::IO, ::MIME"text/plain", Θ::T) where {T <: parameters}
