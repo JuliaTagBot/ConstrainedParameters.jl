@@ -8,10 +8,13 @@ constrained_types = [PositiveVector, ProbabilityVector, RealVector]
 
 #convstrained vector transforms
 function cvt(::Type{q}, x::AbstractArray{T,1}) where {T <: Real, q <: ConstrainedVector}
-  construct(q{T}, x, 0).x
+  out = construct(q{T}, x, 0)
+  update!(out)
+  out.x
 end
-function cvt(::Type{CovarianceMatrix{p,T2} where T2 <: Real}, x::AbstractArray{T,1}) where {T <: Real, p}
+function cvt(::Type{CovarianceMatrix{p}}, x::AbstractArray{T,1}) where {T <: Real, p}
   cv = construct(CovarianceMatrix{p,T}, x, 0)
+  update!(cv)
   ConstrainedParameters.update_Σ!(cv)
   out = similar(x)
   k = 0
@@ -26,16 +29,16 @@ end
   p = rand(1:100)
   x = randn(p)
   cv = construct(q{p,Float64},x,0)
+  update!(cv)
   cv
   @test log_jacobian!(cv) ≈ logabsdet(ForwardDiff.jacobian(x -> cvt(q{p}, x), x))[1]
   @test length(cv) == p
 end
 Base.logdet(A::Symmetric) = 2logdet(chol(A))
-
 p = rand(1:15)
 x = randn(round(Int,p*(p+1)/2))
 cv = construct(CovarianceMatrix{p,Float64},x,0)
-cv
+update!(cv)
 S = randn(2p,p) |> x -> x' * x
 y = @SVector randn(p);
 μ = @SVector randn(p);
