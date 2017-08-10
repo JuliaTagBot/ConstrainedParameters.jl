@@ -13,6 +13,7 @@ import  Base.show,
 
 
 export  Data,
+        parameter,
         parameters,
         CovarianceMatrix,
         ConstrainedVector,

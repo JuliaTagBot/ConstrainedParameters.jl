@@ -23,7 +23,7 @@ end
 function Base.size(::UpperTriangle{p,Float64}) where {p}
   (p,p)
 end
-sub2triangle(i_1::Int, i_2::Int) = i_1 + round(Int, i_2*(i_2-1)/2)
+sub2triangle(i_1::Int, i_2::Int) = i_1 + div(i_2*(i_2-1),2)
 function Base.getindex(A::UpperTriangle, i_1::Int, i_2::Int)
   if i_1 == i_2
     A.diag[i_1]
@@ -47,8 +47,8 @@ function update_U_inverse!(Θ::CovarianceMatrix{p,T} where {T<:Real}) where {p}
 end
 function build(A::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int, CovMat::Symmetric{T,Array{T,2}} = Symmetric(Array{T}(p,p))) where {p, T}
   Λ = view(Θv, i + (1:p))
-  U = UpperTriangleVector{p,T}(MVector{p}(Vector{T}(p)), Vector{T}(round(Int,type_length(A))))
-  U_inverse = UpperTriangleView{p,T}(MVector{p}(exp.(Λ)), view(Θv, i + (1+p:type_length(A))))
+  U = UpperTriangleVector{p,T}(MVector{p}(Vector{T}(p)), Vector{T}(type_length(A)))
+  U_inverse = UpperTriangleView{p,T}(MVector{p}(Vector{T}(p)), view(Θv, i + (1+p:type_length(A))))
   CovarianceMatrix{p, T}(Λ, U, CovMat, U_inverse)
 end
 function construct(A::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int, CovMat::Array{T,2}) where {p, T}
@@ -66,7 +66,7 @@ construct(A::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int) where {p, T} =
 
 
 #@generated function Base.length{p,T}(::Type{CovarianceMatrix{p,T}})
-#  round(Int, p*(p+1)/2)
+#  div(p*(p+1),2)
 #end
 update!(Θ::CovarianceMatrix) = update_U_inverse!(Θ)
 function log_jacobian!(Θ::CovarianceMatrix{p, T}) where {p, T}
@@ -164,7 +164,7 @@ function quad_form(x::AbstractArray{<:Real,1}, Θ::CovarianceMatrix{p, <:Real}) 
   out = (x[1] * Θ.U_inverse.diag[1])^2
   @inbounds for i ∈ 2:p
     dot_prod = x[i] * Θ.U_inverse.diag[i]
-    triangle_index = round(Int, (i-1)*(i-2)/2)
+    triangle_index = div((i-1)*(i-2),2)
     for j ∈ 1:i-1
       dot_prod += x[j] * Θ.U_inverse.off_diag[triangle_index + j]
     end
@@ -235,8 +235,8 @@ function Base.show(io::IO, ::MIME"text/plain", Θ::CovarianceMatrix)
   update_Σ!(Θ)
   println(Θ.Σ)
 end
-@generated type_length(::Type{CovarianceMatrix{p,T}}) where {p,T} = round(Int, p * (p+1)/2)
-@generated param_type_length(::Type{CovarianceMatrix{p,T}}) where {p,T} = Val{round(Int, p * (p+1)/2)}
+@generated type_length(::Type{CovarianceMatrix{p,T}}) where {p,T} = div(p * (p+1),2)
+@generated param_type_length(::Type{CovarianceMatrix{p,T}}) where {p,T} = Val{div(p * (p+1),2)}
 function convert(::Type{Symmetric}, A::CovarianceMatrix{p,T}) where {p,T}
   update_Σ!(A)
   A.Σ

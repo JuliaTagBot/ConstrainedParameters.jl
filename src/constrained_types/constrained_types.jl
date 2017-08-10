@@ -1,6 +1,7 @@
 
 abstract type Data end
 abstract type parameters{T,N} <: AbstractArray{T,N} end
+abstract type parameter{T} <: parameters{T,1} end
 
 
 abstract type Constrainedparameters{p,T,N} <: parameters{T,N} end

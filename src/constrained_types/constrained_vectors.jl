@@ -55,7 +55,7 @@ function Base.setindex!(x::PositiveVector, v::Real, i::Int)
 end
 function construct(::Type{PositiveVector{p,T}}, Θv::Vector{T}, i::Int) where {p, T}
   v = view(Θv, i + (1:p))
-  PositiveVector{p, T}(v, MVector{p}(exp.(v)))
+  PositiveVector{p, T}(v, MVector{p}( Vector{T}(p) ))
 end
 function construct(::Type{PositiveVector{p,T}}, Θv::Vector{T}, i::Int, vals::Vector{T}) where {p, T}
   pv = PositiveVector{p, T}(view(Θv, i + (1:p)), MVector{p}(vals))
@@ -83,7 +83,7 @@ function Base.setindex!(x::ProbabilityVector, v::Real, i::Int)
 end
 function construct(::Type{ProbabilityVector{p,T}}, Θv::Vector{T}, i::Int) where {p, T}
   v = view(Θv, i + (1:p))
-  ProbabilityVector{p, T}(v, MVector{p}(logistic.(v)))
+  ProbabilityVector{p, T}(v, MVector{p}( Vector{T}(p) ))
 end
 function construct(::Type{ProbabilityVector{p,T}}, Θv::Vector{T}, i::Int, vals::Vector{T}) where {p, T}
   pv = ProbabilityVector{p, T}(view(Θv, i + (1:p)), MVector{p}(vals))
@@ -157,9 +157,7 @@ function Simplex(v::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int64}},true}, q = l
   Simplex{q+1,q,T}(v, MVector{q+1}(Vector{T}(q+1)), MVector{q}(Vector{T}(q)), MVector{q}(Vector{T}(q)))
 end
 function construct(::Type{Simplex{p,q,T}} where {p}, Θv::Vector{T}, i::Int) where {q, T}
-  out = Simplex(view(Θv, i + (1:q)), q)
-  update!(out)
-  out
+  Simplex(view(Θv, i + (1:q)), q)
 end
 function construct(::Type{Simplex{p,q,T}}, Θv::Vector{T}, i::Int, vals::Vector{T}) where {p, q, T}
   out = Simplex(view(Θv, i + (1:q)))
