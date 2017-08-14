@@ -10,6 +10,7 @@ import  Base.show,
         Base.+,
         Base.*,
         Base.convert
+        Base.Val
 
 
 export  Data,

@@ -2,9 +2,10 @@
 abstract type Data end
 abstract type parameters{T,N} <: AbstractArray{T,N} end
 abstract type parameter{T} <: parameters{T,1} end
-
-
 abstract type Constrainedparameters{p,T,N} <: parameters{T,N} end
+VectorView{T,P} = Union{SubArray{T,1,P,Tuple{UnitRange{Int}},true}, SlidingVector{T,P}}
+mutable_vector{T} = Union{MVector{p,T} where p, Vector{T}, SizedArray}
+
 function update!(A::AbstractArray)
 end
 log_jacobian!(A::AbstractArray{T}) where {T} = zero(T)

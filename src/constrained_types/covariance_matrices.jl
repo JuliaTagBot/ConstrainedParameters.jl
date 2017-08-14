@@ -1,84 +1,85 @@
+struct CovarianceMatrix{p,l,o} <: CTV{p} end
+Base.@pure CovarianceMatrix(p) = CovarianceMatrix{p,div(p*(p+1),2),div(p*(p-1),2)}()
+Base.length(::CovarianceMatrix{p,l,o} where {p,o}) where l = l
+
 abstract type UpperTriangle{p,T} <: AbstractArray{T,2} end
-struct UpperTriangleView{p,T} <: UpperTriangle{p,T}
+struct UpperTriangleView{p,T,P <: AbstractVector{T}, V <: VectorView{T,P}} <: UpperTriangle{p,T}
   diag::MVector{p,T}
-  off_diag::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int64}},true}
+  off_diag::V
 end
-struct UpperTriangleVector{p,T} <: UpperTriangle{p,T}
+struct UpperTriangleVector{p,T,o} <: UpperTriangle{p,T}
   diag::MVector{p,T}
-  off_diag::Vector{T}
+  off_diag::MVector{o,T}
 end
 
-struct CovarianceMatrix{p, T <: Real} <: SquareMatrix{p, T}
-  Λ::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int64}},true}#length p
-  U::UpperTriangleVector{p,T}
-  Σ::Symmetric{T,Array{T, 2}}
-  U_inverse::UpperTriangleView{p,T}
+struct CovMat{p, l, T <: Real, P <: AbstractVector{T}, V <: VectorView{T,P}, o} <: SquareMatrix{p, T}
+  Λ::V#length p
+  U::UpperTriangleVector{p,T,o}
+  Σ::Symmetric{T,SizedArray{Tuple{p,p},T,2,2}}
+  U_inverse::UpperTriangleView{p,T,P,V}
 end
+length(::CovMat{p,l} where p) where l = l
+length(::CovarianceMatrix{p,l} where p) where l = l
+
+@generated off_diag_count(::Type{Val{p}}) where p = Val{div(p*(p-1),2)}
+@generated val_square(::Type{Val{p}}) where p = Val{abs2(p)}
 
 Base.IndexStyle(::UpperTriangle) = IndexLinear()
 Base.getindex(A::UpperTriangle, i::Int) = A.off_diag[i]
 function Base.setindex!(A::UpperTriangle, v, i::Int)
-  A.off_diag[i] = v
+  @inbounds A.off_diag[i] = v
 end
-function Base.size(::UpperTriangle{p,Float64}) where {p}
+function Base.size(::UpperTriangle{p}) where {p}
   (p,p)
 end
 sub2triangle(i_1::Int, i_2::Int) = i_1 + div(i_2*(i_2-1),2)
 function Base.getindex(A::UpperTriangle, i_1::Int, i_2::Int)
-  if i_1 == i_2
-    A.diag[i_1]
-  else
-    A.off_diag[sub2triangle(i_1, i_2-1)]
-  end
+  @inbounds i_1 == i_2 ? A.diag[i_1] : A.off_diag[sub2triangle(i_1, i_2-1)]
 end
 function Base.setindex!(A::UpperTriangle{p,T}, v::T, i_1::Int, i_2::Int) where {T,p}
   if i_1 == i_2
-    A.diag[i_1] = v
+    @inbounds A.diag[i_1] = v
   else
-    A.off_diag[sub2triangle(i_1, i_2-1)] = v
+    @inbounds A.off_diag[sub2triangle(i_1, i_2-1)] = v
   end
 end
 
-
-function update_U_inverse!(Θ::CovarianceMatrix{p,T} where {T<:Real}) where {p}
+#Only updates U_inverse.
+#This is all that is needed for most probability density functions.
+#In case someone wants to access any other representations, they must explicitly call a function to evaluate it.
+#May eventually implement some sort of lazy evaluation, eg Tim Holy's MappedArrays.
+function update!(Θ::CovMat{p}) where {p}
   @inbounds for i ∈ 1:p
     Θ.U_inverse.diag[i] = exp(Θ.Λ[i])
   end
 end
-function build(::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int, CovMat::Symmetric{T,Array{T,2}} = Symmetric(Array{T,2}(p,p))) where {p, T}
-  Λ = view(Θv, i + (1:p))
-  U = UpperTriangleVector{p,T}(MVector{p}(Vector{T}(p)), Vector{T}(type_length(CovarianceMatrix{p,T})))
-  U_inverse = UpperTriangleView{p,T}(MVector{p}(Vector{T}(p)), view(Θv, i + (1+p:type_length(CovarianceMatrix{p,T}))))
-  CovarianceMatrix{p, T}(Λ, U, CovMat, U_inverse)
+function construct(::CovarianceMatrix{p,l,o}, Θv::V, i::Int, CovMat::SizedArray{Tuple{p,p},T,2,2} = Symmetric(SizedArray{Tuple{p,p},T,2,2}(Array{T,2}(p,p)))) where {p, T, V <: AbstractVector{T}, l, o}
+  ind_end = p-l+i
+  Λ = view(Θv, 1-l+i:ind_end)
+  U = UpperTriangleVector{p,T}(MVector{p}(Vector{T}(p)), MVector{o,T}(Vector{T}(o)))
+  U_inverse = UpperTriangleView{p,T}(MVector{p,T}(exp.(Λ)), view(Θv, 1+ind_end:i))
+  CovMat{p, l, T, P, typeof(Λ), o}(Λ, U, CovMat, U_inverse)
 end
 
-function construct(::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int, CovMat::Array{T,2}) where {p, T}
-  construct(CovarianceMatrix{p,T}, Θv, i, Symmetric(CovMat))
+
+function construct(CM::CovarianceMatrix{p,l,o}, Θv::Vector{T}, i::Int, CovMat::Array{T,2}) where {p, T}
+  construct(CM, Θv, i, Symmetric(CovMat))
 end
-function construct(::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int, CovMat::Symmetric{T,Array{T,2}}) where {p, T}
-  if CovMat.uplo != 'U'
-    Θ = build(CovarianceMatrix{p,T}, Θv, i, Symmetric(CovMat.data'))
-  else
-    Θ = build(CovarianceMatrix{p,T}, Θv, i, CovMat)
-  end
+function construct(CM::CovarianceMatrix, Θv::Vector{T}, i::Int, CovMat::Symmetric{T,Array{T,2}}) where {p, T}
+  Θ = CovMat.uplo != 'U' ? construct(CM, Θv, i, Symmetric(CovMat.data')) : construct(CM, Θv, i, CovMat)
   set_Σ!(Θ)
   Θ
 end
-construct(::Type{CovarianceMatrix{p,T}}, Θv::Vector{T}, i::Int) where {p, T} = build(CovarianceMatrix{p,T}, Θv, i)
 
 
-#@generated function Base.length{p,T}(::Type{CovarianceMatrix{p,T}})
-#  div(p*(p+1),2)
-#end
-update!(Θ::CovarianceMatrix) = update_U_inverse!(Θ)
-function log_jacobian!(Θ::CovarianceMatrix{p, T}) where {p, T}
+function log_jacobian!(Θ::CovMat{p, l, T} where l) where {p, T}
   l_jac = zero(T)
   @inbounds for i ∈ 1:p
     l_jac += (i - 2p - 1) * Θ.Λ[i]
   end
   l_jac
 end
-function chol!(U::UpperTriangle{p,T}, Σ::Symmetric{T,Array{T, 2}}) where {p,T}
+function chol!(U::UpperTriangle{p}, Σ::Symmetric) where {p}
   @inbounds for i ∈ 1:p
     U[i,i] = Σ[i,i]
     for j ∈ 1:i-1
@@ -93,29 +94,26 @@ function chol!(U::UpperTriangle{p,T}, Σ::Symmetric{T,Array{T, 2}}) where {p,T}
   end
 end
 ###This happens when someone sets an index of the covariance matrix.
-function calc_U_from_Σ!(Θ::CovarianceMatrix{p, T}) where {p,T}
-  chol!(Θ.U, Θ.Σ)
-end
-function calc_Σij!(Θ::CovarianceMatrix, i::Int, j::Int)
-  Θ.Σ.data[j,i] = Θ.U[1,i] * Θ.U[1,j]
+calc_U_from_Σ!(Θ::CovMat) = chol!(Θ.U, Θ.Σ)
+function calc_Σij!(Θ::CovMat, i::Int, j::Int)
+  @inbounds Θ.Σ.data[j,i] = Θ.U[1,i] * Θ.U[1,j]
   @inbounds for k ∈ 2:j
     Θ.Σ.data[j,i] += Θ.U[k,i] * Θ.U[k,j]
   end
-  Θ.Σ.data[j,i]
 end
-function calc_Σ!(Θ::CovarianceMatrix{p,<:Real}) where {p}
+function calc_Σ!(Θ::CovMat{p}) where p
   for i ∈ 1:p, j ∈ 1:i
     calc_Σij!(Θ, i, j)
   end
 end
-function calc_invΣij(Θ::CovarianceMatrix{p,T}, i::Int, j::Int) where {p,T}
+function calc_invΣij(Θ::CovMat{p,T}, i::Int, j::Int) where {p,T}
   out = zero(T)
   @inbounds for k ∈ i:p
     out += Θ.U_inverse[i,k] * Θ.U_inverse[j,k]
   end
   out
 end
-function inv!(U_inverse::UpperTriangle{p,T}, U::UpperTriangle{p,T}) where {p,T}
+function inv!(U_inverse::UpperTriangle{p}, U::UpperTriangle{p}) where p
   @inbounds for i ∈ 1:p
     U_inverse.diag[i] = 1 / U.diag[i]
     for j ∈ i+1:p
@@ -128,41 +126,41 @@ function inv!(U_inverse::UpperTriangle{p,T}, U::UpperTriangle{p,T}) where {p,T}
     end
   end
 end
-function calc_U_inverse_from_U!(Θ::CovarianceMatrix)
+function calc_U_inverse_from_U!(Θ::CovMat)
   inv!(Θ.U_inverse, Θ.U)
   Θ.Λ .= log.(Θ.U_inverse.diag)
 end
-function calc_U_from_U_inverse!(Θ::CovarianceMatrix)
+function calc_U_from_U_inverse!(Θ::CovMat)
   inv!(Θ.U, Θ.U_inverse)
 end
-function set_Σ!(Θ::CovarianceMatrix)
+function set_Σ!(Θ::CovMat)
   calc_U_from_Σ!(Θ)
   calc_U_inverse_from_U!(Θ)
 end
-function update_Σ!(Θ::CovarianceMatrix)
+function update_Σ!(Θ::CovMat)
   calc_U_from_U_inverse!(Θ)
   calc_Σ!(Θ)
 end
 
 #Note, accessing the covariance matrix brings you here, where you calculate Σij; if you want access to the cached value you need to reference Θ.Σ[i,j]. Note that the cache is not updated often.
-function Base.getindex(Θ::CovarianceMatrix, i::Int, j::Int)
+function Base.getindex(Θ::CovMat, i::Int, j::Int)
   i > j ? calc_Σij!(Θ,i, j) : calc_Σij!(Θ, j, i)
 end
-function Base.getindex(Θ::CovarianceMatrix{p,T}, k::Int) where {p,T}
+function Base.getindex(Θ::CovMat{p}, k::Int) where p
   Θ[ind2sub((p,p), k)...]
 end
 #Strongly discouraged from calling the following method. But...if you have to, it is here.
-function Base.setindex!(Θ::CovarianceMatrix{p,T}, v::T, k::Int) where {p,T}
+function Base.setindex!(Θ::CovMat{p}, v::T, k::Int) where p
   Θ[ind2sub((p,p), k)] = v
 end
-function Base.setindex!(Θ::CovarianceMatrix{p,T}, v::T, i::Int, j::Int) where {p,T}
+function Base.setindex!(Θ::CovMat, v::T, i::Int, j::Int)
   update_Σ!(Θ)
   i > j ? setindex!(Θ.Σ.data, v, j, i) : setindex!(Θ.Σ.data, v, i, j)
   set_Σ!(Θ)
 end
 
 
-function quad_form(x::AbstractArray{<:Real,1}, Θ::CovarianceMatrix{p, <:Real}) where {p}
+function quad_form(x::AbstractVector, Θ::CovMat{p}) where p
   out = (x[1] * Θ.U_inverse.diag[1])^2
   @inbounds for i ∈ 2:p
     dot_prod = x[i] * Θ.U_inverse.diag[i]
@@ -174,10 +172,10 @@ function quad_form(x::AbstractArray{<:Real,1}, Θ::CovarianceMatrix{p, <:Real}) 
   end
   out
 end
-function trace_AΣinv(A::AbstractArray{<:Real}, Σ::CovarianceMatrix{p,T}) where {p,T}
+function trace_AΣinv(A::AbstractArray{<:Real,2}, Σ::CovMat)
   2*htrace_AΣinv(A,Σ)
 end
-function htrace_AΣinv(A::AbstractArray{<:Real}, Σ::CovarianceMatrix{p,T}) where {p,T}
+function htrace_AΣinv(A::AbstractArray{<:Real,2}, Σ::CovMat{p}) where p
   out = zero(T)
   @inbounds for i ∈ 1:p
     out += A[i,i] * calc_invΣij(Σ, i, i) / 2
@@ -190,59 +188,60 @@ end
 Base.det(U::UpperTriangle) = prod(U.diag)
 Base.logdet(U::UpperTriangle) = sum(log, U.diag)
 Base.trace(U::UpperTriangle) = sum(U.diag)
-Base.det(Θ::CovarianceMatrix) = det(Θ.U_inverse)^-2
-Base.logdet(Θ::CovarianceMatrix) = 2hlogdet(Θ)
-inv_det(Θ::CovarianceMatrix) = det(Θ.U_inverse)^2
-inv_root_det(Θ::CovarianceMatrix) = det(Θ.U_inverse)
-root_det(Θ::CovarianceMatrix) = 1/det(Θ.U_inverse)
-hlogdet(Θ::CovarianceMatrix) = -sum(Θ.Λ)
-nhlogdet(Θ::CovarianceMatrix) = sum(Θ.Λ)
-function trace_inverse(Θ::CovarianceMatrix{p,T}) where {p,T}
-  out = 0
+Base.det(Θ::CovMat) = det(Θ.U_inverse)^-2
+Base.logdet(Θ::CovMat) = 2hlogdet(Θ)
+inv_det(Θ::CovMat) = det(Θ.U_inverse)^2
+inv_root_det(Θ::CovMat) = det(Θ.U_inverse)
+root_det(Θ::CovMat) = 1/det(Θ.U_inverse)
+hlogdet(Θ::CovMat) = -sum(Θ.Λ)
+nhlogdet(Θ::CovMat) = sum(Θ.Λ)
+function trace_inverse(Θ::CovMat{p,l,T} where l) where {p,T}
+  out = zero(T)
   for i ∈ 1:p
     out += calc_invΣij(Θ, i, i)
   end
   out
 end
-function Base.:+(Θ::CovarianceMatrix, A::AbstractArray{Real,2})
+function Base.:+(Θ::CovMat, A::AbstractArray{<: Real,2})
   update_Σ!(Θ)
   Θ.Σ + A
 end
-function Base.:+(A::AbstractArray{Real,2}, Θ::CovarianceMatrix)
+function Base.:+(A::AbstractArray{<: Real,2}, Θ::CovMat)
   update_Σ!(Θ)
   Θ.Σ + A
 end
 #Would you want to output a regular matrix, a symmetric matrix, or a covariance matrix?
-function Base.:+(Θ_1::CovarianceMatrix{p,T}, Θ_2::CovarianceMatrix{p,T}) where {p,T}
+function Base.:+(Θ_1::CovMat{p}, Θ_2::CovMat{p}) where p
   update_Σ!(Θ_1)
   update_Σ!(Θ_2)
-  #CovarianceMatrix(T, p, Θ_1.Σ + Θ_2.Σ)
+  #CovMat(T, p, Θ_1.Σ + Θ_2.Σ)
   Θ_1.Σ + Θ_2.Σ
 end
-function Base.:*(Θ::CovarianceMatrix, A::AbstractArray)
+function Base.:*(Θ::CovMat, A::AbstractArray)
   update_Σ!(Θ)
   Θ.Σ * A
 end
-function Base.:*(A::AbstractArray, Θ::CovarianceMatrix)
+function Base.:*(A::AbstractArray, Θ::CovMat)
   update_Σ!(Θ)
   A * Θ.Σ
 end
-function Base.:*(Θ_1::CovarianceMatrix{p,T}, Θ_2::CovarianceMatrix{p,T}) where {p,T}
+function Base.:*(Θ_1::CovMat{p}, Θ_2::CovMat{p}) where p
   update_Σ!(Θ_1)
   update_Σ!(Θ_2)
-  #CovarianceMatrix(T, p, Θ_1.Σ + Θ_2.Σ)
+  #CovMat(T, p, Θ_1.Σ + Θ_2.Σ)
   Θ_1.Σ * Θ_2.Σ
 end
-function Base.show(io::IO, ::MIME"text/plain", Θ::CovarianceMatrix)
+function Base.show(io::IO, ::MIME"text/plain", Θ::CovMat)
   update_Σ!(Θ)
   println(Θ.Σ)
 end
-@generated type_length(::Type{CovarianceMatrix{p,T}}) where {p,T} = div(p * (p+1),2)
-@generated param_type_length(::Type{CovarianceMatrix{p,T}}) where {p,T} = Val{div(p * (p+1),2)}
-function convert(::Type{Symmetric}, A::CovarianceMatrix{p,T}) where {p,T}
+type_length(::Type{CovMat{p, l}} where p) where l = l
+param_type_length(::Type{CovMat{p,l}} where p) where l = Val{l}
+function convert(::Type{Symmetric}, A::CovMat{p,T}) where {p,T}
   update_Σ!(A)
   A.Σ
 end
-function convert(::Type{Array{T,2}}, A::CovarianceMatrix{p,T}) where {p,T}
-  convert(Array{T,2}, convert(Symmetric{T,Array{T,2}}, A))
+function convert(::Type{Array{T,2}}, A::CovMat{p,l,T} where {p,l}) where T
+    update_Σ!(A)
+    convert(Array{T,2}, A.Σ)
 end
