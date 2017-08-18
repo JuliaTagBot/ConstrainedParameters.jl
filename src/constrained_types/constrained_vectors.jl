@@ -46,22 +46,26 @@ Base.show(io::IO, ::MIME"text/plain", Θ::ConstrainedVector) = print(Θ.x)
 Base.size(x::ConstrainedVector) = size(x.x)
 Base.getindex(x::ConstrainedVector, i::Int) = x.x[i]
 
+
+type_length(::Type{PositiveVector{p}}) where p = p
 length(::PositiveVector{p}) where p = p
 length(::PosiVec{p}) where p = p
+type_length(::Type{ProbabilityVector{p}}) where p = p
 length(::ProbabilityVector{p}) where p = p
 length(::ProbVec{p}) where p = p
+type_length(::Type{RealVector{p}}) where p = p
 length(::RealVector{p}) where p = p
 length(::RealVec{p}) where p = p
+type_length(::Type{Simplex{p,q}} where p) where q = q
 length(::Simplex{p,q} where p) where q = q
 length(::Simp{p,q} where p) where q = q
-
 
 function update!(x::PosiVec{p,T,V,D} where {T <: Real,V<:mutable_vector,D}) where {p}
   @inbounds for i ∈ 1:p
     x.x[i] = exp(x.Θ[i])
   end
 end
-log_jacobian!(x::PosiVec) = sum(x.Θ)
+log_jacobian(x::PosiVec) = sum(x.Θ)
 
 Base.getindex(x::PosiVec, i::Int) = exp(x.Θ[i])
 function Base.setindex!(x::PosiVec{p,T,V,D} where {p,T,V <: mutable_vector, D <: mutable_vector}, v::Real, i::Int)
@@ -69,45 +73,48 @@ function Base.setindex!(x::PosiVec{p,T,V,D} where {p,T,V <: mutable_vector, D <:
   x.Θ[i] = log(v)
 end
 
+
+@inline PosiVec(v::V, x::D, ::Type{Val{p}}) where {p, T, P <: AbstractArray{T,1}, V <: VectorView{T,P}, D <: StaticArray{Tuple{p}, T, 1} } = PosiVec{p, T, P, V, D}(v, x)
 function construct(::PositiveVector{p}, Θv::V, i::Int) where {p, T, V <: mutable_vector{T}}
   v = view( Θv, 1+i-p:i )
-  PosiVec{p, T, V, MVector{p,T}}(v, MVector{p}( exp.(v) ))
+  PosiVec(v, MVector{p}( exp.(v) ), Val{p})
 end
 function construct(::PositiveVector{p}, Θv::SVector{q,T}, i::Int) where {p,q,T}
   v = view( Θv, 1+i-p:i )
-  PosiVec{p, T, SVector{q,T}, SVector{p,T}}(v, SVector{p,T}(exp.(v)) )
+  PosiVec(v, SVector{p,T}(exp.(v)), Val{p})
 end
 function construct(::PositiveVector{p}, Θv::V, i::Int, vals::A) where {p, T, V <: mutable_vector{T}, A <: AbstractArray{T,1}}
-  pv = PosiVec{p, T, V, MVector{p,T}}(view( Θv, 1+i-p:i ), MVector{p}(vals))
+  pv = PosiVec(view( Θv, 1+i-p:i ), MVector{p}(vals), Val{p})
   pv.Θ .= log.(pv.x)
   pv
 end
 
 
-function update!(x::ProbVec{p, T, V, D} where {T <: Real, V <: mutable_vector, D <: mutable_vector}) where {p}
+function update!(x::ProbVec{p}) where {p}
   @inbounds for i ∈ 1:p
     x.x[i] = logistic(x.Θ[i])
   end
 end
 lj(x::Real) = log(x) + log(1 - x)
-log_jacobian!(x::ProbVec) = sum(lj, x.x)
+log_jacobian(x::ProbVec) = sum(lj, x.x)
 
 Base.getindex(x::ProbVec, i::Int) = x.x[i]
 function Base.setindex!(x::ProbVec{p,T,V,D} where {p,T,V <: mutable_vector,D<:mutable_vector}, v::Real, i::Int)
   x.x[i] = v
   x.Θ[i] = logit(v)
 end
+@inline ProbVec(v::V, x::D, ::Type{Val{p}}) where {p, T, P <: AbstractArray{T,1}, V <: VectorView{T,P}, D <: StaticArray{Tuple{p}, T, 1} } = ProbVec{p, T, P, V, D}(v, x)
 function construct(::ProbabilityVector{p}, Θv::V, i::Int) where {p, T, V <: mutable_vector{T}}
   v = view(Θv, 1+i-p:i)
-  ProbVec{p, T, V, MVector{p,T}}(v, MVector{p}( logistic.(v) ))
+  ProbVec(v, MVector{p}( logistic.(v) ), Val{p})
 end
 function construct(::ProbabilityVector{p}, Θv::SVector{q,T}, i::Int) where {p, q, T}
   v = view(Θv, 1+i-p:i)
-  ProbVec{p, T, SVector{q,T}, SVector{p,T}}(v, SVector{p}( logistic.(v) ))
+  ProbVec(v, SVector{p}( logistic.(v) ), Val{p})
 end
 
 function construct(::ProbabilityVector{p}, Θv::V, i::Int, vals::A) where {p, T, V <: mutable_vector{T}, A <: AbstractArray{T,1}}
-  pv = ProbVec{p, T, V, MVector{p,T}}(view(Θv, 1+i-p:i), MVector{p}(vals))
+  pv = ProbVec(view(Θv, 1+i-p:i), MVector{p}(vals), Val{p})
   pv.Θ .= logit.(vals)
   pv
 end
@@ -117,17 +124,17 @@ function Base.setindex!(x::RealVec, v::Real, i::Int)
 end
 function update!(x::RealVec)
 end
-@generated log_jacobian!(x::RealVec{p, T} where {p}) where {T} = zero(T)
+@generated log_jacobian(x::RealVec{p, T} where {p}) where {T} = zero(T)
 
-
+@inline RealVec(v::V, ::Type{Val{p}}) where {p, T, P <: AbstractVector{T}, V <: VectorView{T,P}} = RealVec{p, T, P <: AbstractVector{T}, V <: VectorView{T,P}}(v)
 function construct(::Type{RealVector{p}}, Θ::V, i::Int) where {p, T, V <: mutable_vector{T}}
-  RealVec{p, T, V}(view(Θ, 1+i-p:i))
+  RealVec(view(Θ, 1+i-p:i), Val{p})
 end
 function construct(::Type{RealVector{p}}, Θ::SVector{q,T}, i::Int) where {p, q, T}
-  RealVec{p, T, SVector{q,T}}(view(Θ, 1+i-p:i))
+  RealVec(view(Θ, 1+i-p:i), Val{p})
 end
 function construct(::Type{RealVector{p}}, Θv::V, i::Int, vals::A) where {p, T, V <: mutable_vector{T}, A <: AbstractArray{T,1}}
-  rv = RealVec{p, T, MVector{q,T}}(view(Θv, 1+i-p:i))
+  rv = RealVec(view(Θv, 1+i-p:i), Val{p})
   copy!(rv.x, vals)
   rv
 end
@@ -145,7 +152,7 @@ function update!(x::Simp{p, q, T, V, D, R} where {T <: Real, V, D <: mutable_vec
   end
   x.x[end] = 1 - x.csx[end]
 end
-function log_jacobian!(x::Simp{p, q, T, V, D, R} where {p,T,V,D,R}) where {q}
+function log_jacobian(x::Simp{p, q, T, V, D, R} where {p,T,V,D,R}) where {q}
   out = log(x.z[1]) + log(1 - x.z[1])
   @inbounds for i ∈ 2:q
     out += log(x.z[i]) + log(1 - x.z[i]) + log(1 - x.csx[i - 1])
@@ -157,12 +164,12 @@ Base.getindex(x::Simp, i::Int) = x.x[i]
 
 #Using setindex! is strongly discouraged.
 
-function Base.setindex!(x::Simp{p,q,T,V,D,R} where {p,q,T,V <: mutable_vector}, v::Vector, i::Int)
+function Base.setindex!(x::Simp, v::Vector, i::Int)
   x.x .*= (1 .- v) ./ (1 .- x.x[i])
   x.x[i] = v
   set_prob!(x)
 end
-function set_prob!(x::Simp, π::AbstractArray{<:Real,1})
+function set_prob!(x::Simp, π::AbstractVector)
   x.x .= π
   set_prob!(x)
 end
@@ -175,19 +182,16 @@ function set_prob!(x::Simp{p,q,T,V,D,R} where {T,V<:mutable_vector,D<:mutable_ve
     y[i] = logit(x.z[i]) + log(p - i)
   end
 end
-function Simp(::Type{Val{p}}, ::Type{Val{q}}, Θv::V, i::Int) where {p, q, T, V <: AbstractArray{T,1}}
-    Simp{p, q, T, V, MVector{p,T}, MVector{q,T}}(view(Θv, 1+i-q:i), MVector{p,T}(Vector{T}(p)), MVector{q,T}(Vector{T}(q)), MVector{q,T}(Vector{T}(q)))
+@inline function Simp(::Type{Val{p}}, ::Type{Val{q}}, Θv::V, i::Int) where {p, q, T, P, V <: VectorView{T,P}}
+    Simp{p, q, T, P, V, MVector{p,T}, MVector{q,T}}(view(Θv, 1+i-q:i), MVector{p,T}(Vector{T}(p)), MVector{q,T}(Vector{T}(q)), MVector{q,T}(Vector{T}(q)))
 end
-function Simp(::Type{Val{p}}, Θv::V, i::Int) where {p, q, T, V <: AbstractArray{T,1}}
-    Simp(Val{p}, param_type_length(Simp{p}), Θv, i)
-end
-function construct(::Type{Simplex{p}}, Θv::V, i::Int) where {p, q, V}
-    s = Simp(Val{p}, Θv, i)
+function construct(::Type{Simplex{p, q}}, Θv::V, i::Int) where {p, q, V}
+    s = Simp(Val{p}, Val{q}, Θv, i)
     update!(s)
     s
 end
-function construct(::Type{Simplex{p}}, Θv::V, i::Int, vals::A) where {p, q, T, V <: mutable_vector{T} A <: AbstractArray{T}}
-  out = Simp(Val{p}, Θv, i)
+function construct(::Simplex{p,q}, Θv::V, i::Int, vals::A) where {p, q, T, V <: mutable_vector{T}, A <: AbstractArray{T}}
+  out = Simp(Val{p}, Val{q}, Θv, i)
   set_prob!(out, vals)
   out
 end

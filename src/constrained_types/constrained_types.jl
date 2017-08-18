@@ -4,11 +4,11 @@ abstract type parameters{T,N} <: AbstractArray{T,N} end
 abstract type parameter{T} <: parameters{T,1} end
 abstract type Constrainedparameters{p,T,N} <: parameters{T,N} end
 VectorView{T,P} = Union{SubArray{T,1,P,Tuple{UnitRange{Int}},true}, SlidingVector{T,P}}
-mutable_vector{T} = Union{MVector{p,T} where p, Vector{T}, SizedArray}
+mutable_vector{T} = Union{MVector{p,T} where p, Vector{T}, SizedArray{<:Tuple,T,1,1}, SlidingVector{T}}
 
 function update!(A::AbstractArray)
 end
-log_jacobian!(A::AbstractArray{T}) where {T} = zero(T)
+log_jacobian(A::AbstractArray{T}) where {T} = zero(T)
 Base.IndexStyle(::parameters) = IndexLinear()
 
 type_length(::Type{Vector{T}} where {T}) = 0

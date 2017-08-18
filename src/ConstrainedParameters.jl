@@ -1,16 +1,17 @@
 module ConstrainedParameters
 
-using StaticArrays
+using StaticArrays, SparseQuadratureGrids
 
-import  Base.show,
-        Base.getindex,
-        Base.setindex!,
-        Base.size,
-        Base.IndexStyle,
-        Base.+,
-        Base.*,
-        Base.convert
-        Base.Val
+import  Base:   show,
+                getindex,
+                setindex!,
+                size,
+                IndexStyle,
+                +,
+                *,
+                convert,
+                Val,
+                length
 
 
 export  Data,
@@ -24,7 +25,7 @@ export  Data,
         construct,
         negative_log_density,
         negative_log_density!,
-        log_jacobian!,
+        log_jacobian,
         quad_form,
         inv_det,
         inv_root_det,
@@ -44,8 +45,8 @@ export  Data,
 
 include("helper_functions.jl")
 include("constrained_types/constrained_types.jl")
-include("constrained_types/covariance_matrices.jl")
 include("constrained_types/constrained_vectors.jl")
+include("constrained_types/covariance_matrices.jl")
 include("log_density_functions.jl")
 
 end # module

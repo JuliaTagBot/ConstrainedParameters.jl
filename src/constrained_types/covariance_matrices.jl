@@ -1,6 +1,5 @@
 struct CovarianceMatrix{p,l,o} <: CTV{p} end
 Base.@pure CovarianceMatrix(p) = CovarianceMatrix{p,div(p*(p+1),2),div(p*(p-1),2)}()
-Base.length(::CovarianceMatrix{p,l,o} where {p,o}) where l = l
 
 abstract type UpperTriangle{p,T} <: AbstractArray{T,2} end
 struct UpperTriangleView{p,T,P <: AbstractVector{T}, V <: VectorView{T,P}} <: UpperTriangle{p,T}
@@ -20,23 +19,24 @@ struct CovMat{p, l, T <: Real, P <: AbstractVector{T}, V <: VectorView{T,P}, o} 
 end
 length(::CovMat{p,l} where p) where l = l
 length(::CovarianceMatrix{p,l} where p) where l = l
+type_length(::Type{CovarianceMatrix{p,l}} where p) where l = l
 
 @generated off_diag_count(::Type{Val{p}}) where p = Val{div(p*(p-1),2)}
 @generated val_square(::Type{Val{p}}) where p = Val{abs2(p)}
 
-Base.IndexStyle(::UpperTriangle) = IndexLinear()
-Base.getindex(A::UpperTriangle, i::Int) = A.off_diag[i]
-function Base.setindex!(A::UpperTriangle, v, i::Int)
+IndexStyle(::UpperTriangle) = IndexLinear()
+getindex(A::UpperTriangle, i::Int) = A.off_diag[i]
+function setindex!(A::UpperTriangle, v, i::Int)
   @inbounds A.off_diag[i] = v
 end
-function Base.size(::UpperTriangle{p}) where {p}
+function size(::UpperTriangle{p}) where {p}
   (p,p)
 end
 sub2triangle(i_1::Int, i_2::Int) = i_1 + div(i_2*(i_2-1),2)
-function Base.getindex(A::UpperTriangle, i_1::Int, i_2::Int)
+function getindex(A::UpperTriangle, i_1::Int, i_2::Int)
   @inbounds i_1 == i_2 ? A.diag[i_1] : A.off_diag[sub2triangle(i_1, i_2-1)]
 end
-function Base.setindex!(A::UpperTriangle{p,T}, v::T, i_1::Int, i_2::Int) where {T,p}
+function setindex!(A::UpperTriangle{p,T}, v::T, i_1::Int, i_2::Int) where {T,p}
   if i_1 == i_2
     @inbounds A.diag[i_1] = v
   else
@@ -62,17 +62,17 @@ function construct(::CovarianceMatrix{p,l,o}, Θv::V, i::Int, CovMat::SizedArray
 end
 
 
-function construct(CM::CovarianceMatrix{p,l,o}, Θv::Vector{T}, i::Int, CovMat::Array{T,2}) where {p, T}
+function construct(CM::CovarianceMatrix, Θv::Vector{T}, i::Int, CovMat::Array{T,2}) where {T}
   construct(CM, Θv, i, Symmetric(CovMat))
 end
-function construct(CM::CovarianceMatrix, Θv::Vector{T}, i::Int, CovMat::Symmetric{T,Array{T,2}}) where {p, T}
+function construct(CM::CovarianceMatrix, Θv::Vector{T}, i::Int, CovMat::Symmetric{T,Array{T,2}}) where {T}
   Θ = CovMat.uplo != 'U' ? construct(CM, Θv, i, Symmetric(CovMat.data')) : construct(CM, Θv, i, CovMat)
   set_Σ!(Θ)
   Θ
 end
 
 
-function log_jacobian!(Θ::CovMat{p, l, T} where l) where {p, T}
+function log_jacobian(Θ::CovMat{p, l, T} where l) where {p, T}
   l_jac = zero(T)
   @inbounds for i ∈ 1:p
     l_jac += (i - 2p - 1) * Θ.Λ[i]
@@ -150,10 +150,10 @@ function Base.getindex(Θ::CovMat{p}, k::Int) where p
   Θ[ind2sub((p,p), k)...]
 end
 #Strongly discouraged from calling the following method. But...if you have to, it is here.
-function Base.setindex!(Θ::CovMat{p}, v::T, k::Int) where p
+function Base.setindex!(Θ::CovMat{p}, v::Real, k::Int) where p
   Θ[ind2sub((p,p), k)] = v
 end
-function Base.setindex!(Θ::CovMat, v::T, i::Int, j::Int)
+function Base.setindex!(Θ::CovMat, v::Real, i::Int, j::Int)
   update_Σ!(Θ)
   i > j ? setindex!(Θ.Σ.data, v, j, i) : setindex!(Θ.Σ.data, v, i, j)
   set_Σ!(Θ)
